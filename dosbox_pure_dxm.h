@@ -25,10 +25,15 @@
 #define DXM_ENV_SHOWN (RETRO_ENVIRONMENT_PRIVATE | 3) /* bool*    : the tube shows this screen*/
 #define DXM_ENV_DRIVE (RETRO_ENVIRONMENT_PRIVATE | 4) /* unsigned*: run the drive, in ms      */
 
+/* Set the first time the frontend answers, and read from the shell (HELP
+ * lists the machine's own commands only when it is the machine in front). */
+bool dbp_dxm_present = false;
+
 static bool DXM_Present()
 {
 	bool yes = false;
-	return (environ_cb && environ_cb(DXM_ENV_HELLO, &yes) && yes);
+	dbp_dxm_present = (environ_cb && environ_cb(DXM_ENV_HELLO, &yes) && yes);
+	return dbp_dxm_present;
 }
 
 static void DBP_DXMBiosProgram(Program** make)

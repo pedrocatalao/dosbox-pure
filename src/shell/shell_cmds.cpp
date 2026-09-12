@@ -222,9 +222,15 @@ void DOS_Shell::CMD_HELP(char * args){
 	/* Print the help */
 	if(!optall) WriteOut(MSG_Get("SHELL_CMD_HELP"));
 	Bit32u cmd_index=0,write_count=0;
+	//DBP: DOS ex Machina's own commands, at the head of both lists
+	extern bool dbp_dxm_present;
+	if (dbp_dxm_present) {
+		WriteOut("\033[37;1m%-8s\033[0m  %s","SETUP","Open the machine's setup.\n");
+		WriteOut("\033[37;1m%-8s\033[0m  %s","CATALOG","Browse and install software.\n");
+	}
 	while (cmd_list[cmd_index].name) {
 		if (optall || !cmd_list[cmd_index].flags) {
-			WriteOut("<\033[34;1m%-8s\033[0m> %s",cmd_list[cmd_index].name,MSG_Get(cmd_list[cmd_index].help));
+			WriteOut("\033[37;1m%-8s\033[0m  %s",cmd_list[cmd_index].name,MSG_Get(cmd_list[cmd_index].help));
 			if(!(++write_count%22)) CMD_PAUSE(empty_string);
 		}
 		cmd_index++;
