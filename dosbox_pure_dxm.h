@@ -39,7 +39,14 @@ static bool DXM_Present()
 static void DBP_DXMBiosProgram(Program** make)
 {
 	/* The box, in the 80-column screen: the rules and the rows are the
-	 * same width, and every field starts in a fixed column. */
+	 * same width, and every field starts in a fixed column.
+	 *
+	 * Double lines throughout, and not by taste: a national keyboard brings
+	 * its code page with it, and CP850, CP860 and the rest spend several of
+	 * CP437's box-drawing slots on accented capitals.  The double-line set
+	 * (\xC9 \xCD \xBB \xBA \xCC \xB9 \xC8 \xBC) is the part they all keep;
+	 * the single-into-double joints \xC7 and \xB6 are not, and came out as
+	 * letters on a Portuguese machine. */
 	enum { WIDTH = 79, LEFT = 1, RIGHT = 78, L_LABEL = 3, L_VALUE = 22, R_LABEL = 41, R_VALUE = 60 };
 
 	struct DXMBios : Program
@@ -144,7 +151,7 @@ static void DBP_DXMBiosProgram(Program** make)
 			Line("CPU Type", (mhz >= 100 ? "486DX4" : mhz >= 50 ? "486DX2" : "486DX"), "Base Memory", base);
 			Line("Co-Processor", "Installed", "Extended Memory", ext);
 			Line("CPU Clock", clock, "Cache Memory", "256K");
-			Rule('\xC7', '\xC4', '\xB6');
+			Rule('\xCC', '\xCD', '\xB9');
 			Line("Diskette Drive A", "1.44M, 3.5 in.", "Display Type", "EGA/VGA");
 			Line("Diskette Drive B", "None", "Serial Port(s)", "3F8 2F8");
 			Line("Pri. Master Disk", "LBA,Mode 4,540MB", "MIDI Port", "330");
