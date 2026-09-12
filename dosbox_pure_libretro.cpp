@@ -2731,6 +2731,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 	PROGRAMS_MakeFile("REMOUNT.COM", DBP_PureRemountProgram);
 	PROGRAMS_MakeFile("XCOPY.COM", DBP_PureXCopyProgram);
 	PROGRAMS_MakeFile("DXMBIOS.COM", DBP_DXMBiosProgram);
+	PROGRAMS_MakeFile("SETUP.COM", DBP_DXMSetupProgram);
 
 	if (!dbp_skip_c_mount)
 	{

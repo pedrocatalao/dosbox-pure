@@ -30,6 +30,10 @@
  * particular emulates a whole second processor whether anything is playing
  * or not, which is not a thing to switch on by accident. */
 #define DXM_ENV_MIDI (RETRO_ENVIRONMENT_PRIVATE | 5)
+/* bool*: SETUP.  Setting it asks the machine to put its own configuration
+ * screen up; reading it says whether the screen is still there.  The
+ * program that asks then waits, so DOS is occupied for as long as it is. */
+#define DXM_ENV_SETUP (RETRO_ENVIRONMENT_PRIVATE | 6)
 
 /* Set the first time the frontend answers, and read from the shell (HELP
  * lists the machine's own commands only when it is the machine in front). */
@@ -48,6 +52,30 @@ static const char* DXM_Midi()
 {
 	const char* want = NULL;
 	return (environ_cb && environ_cb(DXM_ENV_MIDI, &want) ? want : NULL);
+}
+
+/* SETUP, at the DOS prompt.  The screen is not DOS's and not drawn here:
+ * the machine takes the tube back for as long as it is up, and this program
+ * stands still meanwhile so that DOS is not doing anything behind it. */
+static void DBP_DXMSetupProgram(Program** make)
+{
+	struct DXMSetup : Program
+	{
+		void Run(void)
+		{
+			if (!DXM_Present()) { WriteOut("SETUP needs the machine this DOS runs in.\n"); return; }
+			bool up = true;
+			if (!environ_cb(DXM_ENV_SETUP, &up)) return;
+			for (Bit32u t0 = DBP_GetTicks(); !first_shell->exit;)
+			{
+				CALLBACK_Idle();
+				up = false;
+				if (!environ_cb(DXM_ENV_SETUP, &up) || !up) break;
+				if ((DBP_GetTicks() - t0) > 3600000) break; /* an hour of it is enough */
+			}
+		}
+	};
+	*make = new DXMSetup;
 }
 
 static void DBP_DXMBiosProgram(Program** make)
