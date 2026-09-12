@@ -1473,6 +1473,7 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 #include "dosbox_pure_pad.h"
 #include "dosbox_pure_run.h"
 #include "dosbox_pure_osd.h"
+#include "dosbox_pure_dxm.h"
 
 Bitu GFX_GetBestMode(Bitu flags)
 {
@@ -2729,6 +2730,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 	PROGRAMS_MakeFile("LABEL.COM", DBP_PureLabelProgram);
 	PROGRAMS_MakeFile("REMOUNT.COM", DBP_PureRemountProgram);
 	PROGRAMS_MakeFile("XCOPY.COM", DBP_PureXCopyProgram);
+	PROGRAMS_MakeFile("DXMBIOS.COM", DBP_DXMBiosProgram);
 
 	if (!dbp_skip_c_mount)
 	{
@@ -2832,6 +2834,10 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 	{
 		bool auto_mount = true;
 		autoexec->ExecuteDestroy();
+		// DOS ex Machina finishes its BIOS screen inside the machine (see dosbox_pure_dxm.h).
+		// Echo off first: the shell prints a blank line after every autoexec line while it is on,
+		// and the spacing under "Starting DXM-DOS..." is the BIOS program's to decide.
+		if (DXM_Present()) ((static_cast<Section_line*>(autoexec)->data += "@ECHO OFF\n") += "@Z:DXMBIOS\n");
 		if (!force_puremenu && dbp_menu_time != (signed char)-1 && path_extlen == 3 && (!strncasecmp(path_ext, "EXE", 3) || !strncasecmp(path_ext, "COM", 3) || !strncasecmp(path_ext, "BAT", 3)) && !Drives['C'-'A']->FileExists("AUTOBOOT.DBP"))
 		{
 			((((((static_cast<Section_line*>(autoexec)->data += "echo off") += '\n') += ((path_ext[0]|0x20) == 'b' ? "call " : "")) += path_file) += '\n') += "Z:PUREMENU") += " -FINISH\n";
