@@ -162,7 +162,9 @@ static void DBP_DXMBiosProgram(Program** make)
 			Wait(250);
 			WriteOut("DXM Mouse Driver, Version 8.20\n");
 			Wait(20);
-			WriteOut("Mouse enabled: CTRL+F10 to release/capture.\n\n");
+			/* the key itself in bright white: DOS's CON device reads the
+			 * ANSI escapes, the way ANSI.SYS did */
+			WriteOut("Mouse enabled: \033[1;37mCTRL+F10\033[0m to release/capture.\n\n");
 			Wait(500);
 		}
 	};
