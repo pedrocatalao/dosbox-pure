@@ -24,6 +24,12 @@
 #define DXM_ENV_MHZ   (RETRO_ENVIRONMENT_PRIVATE | 2) /* unsigned*: the turbo display's clock */
 #define DXM_ENV_SHOWN (RETRO_ENVIRONMENT_PRIVATE | 3) /* bool*    : the tube shows this screen*/
 #define DXM_ENV_DRIVE (RETRO_ENVIRONMENT_PRIVATE | 4) /* unsigned*: run the drive, in ms      */
+/* const char**: which MIDI device the machine wants - "auto" for whatever
+ * is on C:, "off" for none, or "mt32", "sc55", "sf2" to pick one of them.
+ * Without this the core takes whatever ROMs it finds, and the SC-55 in
+ * particular emulates a whole second processor whether anything is playing
+ * or not, which is not a thing to switch on by accident. */
+#define DXM_ENV_MIDI (RETRO_ENVIRONMENT_PRIVATE | 5)
 
 /* Set the first time the frontend answers, and read from the shell (HELP
  * lists the machine's own commands only when it is the machine in front). */
@@ -34,6 +40,14 @@ static bool DXM_Present()
 	bool yes = false;
 	dbp_dxm_present = (environ_cb && environ_cb(DXM_ENV_HELLO, &yes) && yes);
 	return dbp_dxm_present;
+}
+
+/* NULL when the machine in front is not DXM, in which case the core keeps
+ * its own habit of using whatever it finds. */
+static const char* DXM_Midi()
+{
+	const char* want = NULL;
+	return (environ_cb && environ_cb(DXM_ENV_MIDI, &want) ? want : NULL);
 }
 
 static void DBP_DXMBiosProgram(Program** make)

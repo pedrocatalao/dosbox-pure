@@ -2807,8 +2807,14 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 		}
 
 		// Try to load either DOSBOX.SF2 or a pair of MT32_CONTROL.ROM/MT32_PCM.ROM or SC55 ROM1.BIN from the mounted C: drive and use as fixed midi config
+		//DBP: DOS ex Machina says which of them it wants, or none at all: what is on C: is what is available, not what must be used (dosbox_pure_dxm.h)
+		const char* dxm_midi = DXM_Midi();
+		const bool dxm_any  = (!dxm_midi || !strcmp(dxm_midi, "auto"));
+		const bool want_sf2  = (dxm_any || !strcmp(dxm_midi, "sf2"));
+		const bool want_mt32 = (dxm_any || !strcmp(dxm_midi, "mt32"));
+		const bool want_sc55 = (dxm_any || !strcmp(dxm_midi, "sc55"));
 		const char* mountedMidi;
-		if (drive_c->FileExists((mountedMidi = "$C:\\DOSBOX.SF2")+4) || (drive_c->FileExists(("$C:\\MT32_PCM.ROM")+4) && (drive_c->FileExists((mountedMidi = "$C:\\MT32TROL.ROM")+4) || drive_c->FileExists((mountedMidi = "$C:\\MT32_C~1.ROM")+4))) || drive_c->FileExists((mountedMidi = "$C:\\ROM1.BIN")+4))
+		if ((want_sf2 && drive_c->FileExists((mountedMidi = "$C:\\DOSBOX.SF2")+4)) || (want_mt32 && drive_c->FileExists(("$C:\\MT32_PCM.ROM")+4) && (drive_c->FileExists((mountedMidi = "$C:\\MT32TROL.ROM")+4) || drive_c->FileExists((mountedMidi = "$C:\\MT32_C~1.ROM")+4))) || (want_sc55 && drive_c->FileExists((mountedMidi = "$C:\\ROM1.BIN")+4)))
 		{
 			Section* sec = control->GetSection("midi");
 			sec->ExecuteDestroy(false);
@@ -2817,6 +2823,19 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 			prop->MarkFixed();
 			prop = sec->GetProp("mpu401");
 			prop->SetValue("intelligent");
+			prop->MarkFixed();
+			sec->ExecuteInit(false);
+		}
+		//DBP: and nothing at all, which no file on C: can express: the port is shut, so a game sending to it is silent.  The card's own FM chip is not a MIDI device and is not affected - a game set to AdLib plays through it either way.
+		else if (dxm_midi && !strcmp(dxm_midi, "off"))
+		{
+			Section* sec = control->GetSection("midi");
+			sec->ExecuteDestroy(false);
+			Property* prop = sec->GetProp("mididevice");
+			prop->SetValue("none");
+			prop->MarkFixed();
+			prop = sec->GetProp("mpu401");
+			prop->SetValue("none");
 			prop->MarkFixed();
 			sec->ExecuteInit(false);
 		}
