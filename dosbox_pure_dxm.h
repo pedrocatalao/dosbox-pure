@@ -54,6 +54,20 @@ static const char* DXM_Midi()
 	return (environ_cb && environ_cb(DXM_ENV_MIDI, &want) ? want : NULL);
 }
 
+/* The machine's own programs that are ordinary DOS executables rather than
+ * callbacks into the core: served from memory on Z:, which is on the PATH,
+ * so they are always there and cannot be deleted.  FreeDOS EDIT, from
+ * dxm/edit/ (GPL-2.0, source alongside).  Z: is read-only, so EDIT keeps
+ * the settings it shipped with: it cannot write its EDIT.CFG back. */
+#include "dosbox_pure_dxm_edit.h"
+static void DXM_RegisterFiles()
+{
+	if (!DXM_Present()) return;
+	VFILE_Register("EDIT.EXE", (Bit8u*)dxm_edit_exe, (Bit32u)sizeof(dxm_edit_exe));
+	VFILE_Register("EDIT.HLP", (Bit8u*)dxm_edit_hlp, (Bit32u)sizeof(dxm_edit_hlp));
+	VFILE_Register("EDIT.CFG", (Bit8u*)dxm_edit_cfg, (Bit32u)sizeof(dxm_edit_cfg));
+}
+
 /* SETUP, at the DOS prompt.  The screen is not DOS's and not drawn here:
  * the machine takes the tube back for as long as it is up, and this program
  * stands still meanwhile so that DOS is not doing anything behind it. */
