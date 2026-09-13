@@ -5,7 +5,7 @@
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FILES = [("EDIT.EXE", "dxm_edit_exe"), ("EDIT.HLP", "dxm_edit_hlp"), ("EDIT.CFG", "dxm_edit_cfg")]
+FILES = [("EDIT.EXE", "dxm_edit_exe"), ("EDIT.HLP", "dxm_edit_hlp")]
 
 out = ["// Generated from dxm/edit/ - FreeDOS EDIT 0.9a (GPL-2.0), served on Z: when",
        "// DOS ex Machina is the frontend.  Regenerate after replacing those files:",
