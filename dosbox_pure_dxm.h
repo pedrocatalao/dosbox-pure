@@ -34,6 +34,20 @@
  * screen up; reading it says whether the screen is still there.  The
  * program that asks then waits, so DOS is occupied for as long as it is. */
 #define DXM_ENV_SETUP (RETRO_ENVIRONMENT_PRIVATE | 6)
+/* dxm_catalog_msg*: CATALOG.  The program and the machine's screen talk
+ * through one of these; the core fills `op`, the machine the rest.  The
+ * struct is the same on both sides (src/dosbox/dosbox.c). */
+#define DXM_ENV_CATALOG (RETRO_ENVIRONMENT_PRIVATE | 7)
+struct dxm_catalog_msg
+{
+	int op;    /* from the core: 0 poll, 1 open, 2 back from an excursion */
+	int reply; /* from the machine: 0 stay up, 1 closed, 2 run an excursion */
+	int kind;  /* the excursion: 0 a command, 1 a nested COMMAND */
+	char drive;
+	char dir[80];
+	char cmd[80];
+	char rescan; /* a drive whose listing the machine changed, or 0 */
+};
 
 /* Set the first time the frontend answers, and read from the shell (HELP
  * lists the machine's own commands only when it is the machine in front). */
@@ -89,6 +103,67 @@ static void DBP_DXMSetupProgram(Program** make)
 		}
 	};
 	*make = new DXMSetup;
+}
+
+/* CATALOG, at the DOS prompt.  Like SETUP the screen is the machine's; unlike
+ * it, the program is asked to run things while the screen is up - a title,
+ * its own setup, or a COMMAND in its directory - and the screen comes back
+ * when they return.  A 1993 program shelled out the same way: it noted where
+ * it was, ran the thing, and put the directory back. */
+static void DBP_DXMCatalogProgram(Program** make)
+{
+	struct DXMCatalog : Program
+	{
+		void Excursion(const dxm_catalog_msg& m)
+		{
+			Bit8u drive0 = DOS_GetDefaultDrive();
+			char dir0[DOS_PATHLENGTH + 2] = "\\";
+			DOS_GetCurrentDir(0, dir0 + 1);
+			if (m.drive >= 'A' && m.drive <= 'Z' && Drives[m.drive - 'A'])
+				DOS_SetDrive((Bit8u)(m.drive - 'A'));
+			if (m.dir[0] && !DOS_ChangeDir(m.dir))
+				WriteOut("Cannot change to %s\n", m.dir);
+			char line[128];
+			if (m.kind == 1)
+			{
+				WriteOut("\nType EXIT to return to CATALOG.\n\n");
+				safe_strncpy(line, "COMMAND", sizeof line);
+			}
+			else
+				safe_strncpy(line, m.cmd, sizeof line);
+			first_shell->ParseLine(line);
+			DOS_SetDrive(drive0);
+			DOS_ChangeDir(dir0);
+		}
+
+		void Run(void)
+		{
+			if (!DXM_Present()) { WriteOut("CATALOG needs the machine this DOS runs in.\n"); return; }
+			dxm_catalog_msg m;
+			memset(&m, 0, sizeof m);
+			m.op = 1;
+			if (!environ_cb(DXM_ENV_CATALOG, &m)) return;
+			for (Bit32u t0 = DBP_GetTicks(); !first_shell->exit;)
+			{
+				CALLBACK_Idle();
+				m.op = 0;
+				if (!environ_cb(DXM_ENV_CATALOG, &m)) break;
+				if (m.rescan >= 'A' && m.rescan <= 'Z' && Drives[m.rescan - 'A'])
+					Drives[m.rescan - 'A']->EmptyCache(); /* something was installed behind DOS */
+				if (m.reply == 1) break;
+				if (m.reply == 2)
+				{
+					Excursion(m);
+					m.op = 2;
+					if (!environ_cb(DXM_ENV_CATALOG, &m)) break;
+					t0 = DBP_GetTicks();
+					continue;
+				}
+				if ((DBP_GetTicks() - t0) > 3600000) break; /* an hour of browsing is enough */
+			}
+		}
+	};
+	*make = new DXMCatalog;
 }
 
 static void DBP_DXMBiosProgram(Program** make)
