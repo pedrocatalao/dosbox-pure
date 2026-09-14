@@ -38,6 +38,9 @@
  * through one of these; the core fills `op`, the machine the rest.  The
  * struct is the same on both sides (src/dosbox/dosbox.c). */
 #define DXM_ENV_CATALOG (RETRO_ENVIRONMENT_PRIVATE | 7)
+/* const char**: the drives the machine wants besides C:, a line each as
+ * "D=LABEL=/host/folder/".  A catalogue on a letter is one of these. */
+#define DXM_ENV_DRIVES (RETRO_ENVIRONMENT_PRIVATE | 8)
 struct dxm_catalog_msg
 {
 	int op;    /* from the core: 0 poll, 1 open, 2 back from an excursion */
@@ -79,6 +82,37 @@ static void DXM_RegisterFiles()
 	if (!DXM_Present()) return;
 	VFILE_Register("EDIT.EXE", (Bit8u*)dxm_edit_exe, (Bit32u)sizeof(dxm_edit_exe));
 	VFILE_Register("EDIT.HLP", (Bit8u*)dxm_edit_hlp, (Bit32u)sizeof(dxm_edit_hlp));
+}
+
+/* The drives besides C:, mounted as the core starts, as plain hard disks on
+ * the folders the machine keeps for them: what is installed there stays
+ * there, and DOS sees it as it would a second disk. */
+static void DXM_MountDrives()
+{
+	const char* list = NULL;
+	if (!DXM_Present() || !environ_cb(DXM_ENV_DRIVES, &list) || !list) return;
+	for (const char* p = list; *p;)
+	{
+		const char* end = strchr(p, '\n');
+		std::string line(p, end ? (size_t)(end - p) : strlen(p));
+		p = end ? end + 1 : p + line.size();
+		/* D=LABEL=/folder/ */
+		size_t eq2 = line.find('=', 2);
+		if (line.size() < 5 || line[1] != '=' || eq2 == std::string::npos) continue;
+		char letter = (char)toupper((unsigned char)line[0]);
+		if (letter < 'D' || letter > 'Z' || Drives[letter-'A']) continue;
+		std::string label = line.substr(2, eq2 - 2), dir = line.substr(eq2 + 1);
+		if (dir.empty()) continue;
+		strreplace((char*)dir.c_str(), (CROSS_FILESPLIT == '\\' ? '/' : '\\'), CROSS_FILESPLIT);
+		if (dir.back() != CROSS_FILESPLIT) dir += CROSS_FILESPLIT;
+		dir_information* dirp = open_directory(dir.c_str());
+		if (!dirp) { emuthread_notify(0, LOG_ERROR, "DXM: cannot mount %c: on %s", letter, dir.c_str()); continue; }
+		close_directory(dirp);
+		localDrive* drive = new localDrive(dir.c_str(), 512, 32, 32765, 16000, 0xF8);
+		drive->label.SetLabel(label.c_str(), false, true);
+		Drives[letter-'A'] = drive;
+		mem_writeb(Real2Phys(dos.tables.mediaid) + (letter-'A') * 9, drive->GetMediaByte());
+	}
 }
 
 /* SETUP, at the DOS prompt.  The screen is not DOS's and not drawn here:

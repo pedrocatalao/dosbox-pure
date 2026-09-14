@@ -2759,6 +2759,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 			mem_writeb(Real2Phys(dos.tables.mediaid) + ('C'-'A') * 9, uni->GetMediaByte());
 		}
 	}
+	DXM_MountDrives(); // the machine's catalogues on their letters (dosbox_pure_dxm.h)
 
 	// Detect content year and auto mapping
 	if (newcontent && !reinit)
