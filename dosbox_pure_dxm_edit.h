@@ -1,4 +1,4 @@
-// Generated from dxm/edit/ - FreeDOS EDIT 0.9a (GPL-2.0), served on Z: when
+// Generated from dxm/edit/ - FreeDOS EDIT 0.9b (GPL-2.0), served on Z: when
 // DOS ex Machina is the frontend.  Regenerate after replacing those files:
 //   python3 dxm/edit/mkheader.py
 #ifndef DOSBOX_PURE_DXM_EDIT_H
