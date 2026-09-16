@@ -3862,7 +3862,12 @@ bool retro_unserialize(const void *data, size_t size)
 
 void retro_deinit(void)
 {
-	for (DBP_Buffer& buf : dbp_buffers) { if (buf.video) { free(buf.video); buf.video = NULL; } }
+	// The sizes go with the memory they described.  A frontend that restarts
+	// its machine loads the core again in the same process - and an image
+	// that stays loaded keeps these - so a cap left standing for a buffer
+	// that is gone makes the next run take the branch that skips the
+	// realloc, and draw into a null pointer.
+	for (DBP_Buffer& buf : dbp_buffers) { free(buf.video); buf = DBP_Buffer(); }
 }
 
 // Unused features
