@@ -312,9 +312,12 @@ static void DBP_DXMBiosProgram(Program** make)
 			Centred("DOS ex Machina");
 			Centred("System Configurations");
 			Rule('\xC9', '\xCD', '\xBB');
-			Line("CPU Type", (mhz >= 100 ? "486DX4" : mhz >= 50 ? "486DX2" : "486DX"), "Base Memory", base);
+			/* the chip each stop on the turbo display would have been */
+			const char* cpu = (mhz >= 200 ? "Pentium MMX" : mhz >= 133 ? "Pentium" :
+			                   mhz >= 100 ? "486DX4" : mhz >= 50 ? "486DX2" : "486DX");
+			Line("CPU Type", cpu, "Base Memory", base);
 			Line("Co-Processor", "Installed", "Extended Memory", ext);
-			Line("CPU Clock", clock, "Cache Memory", "256K");
+			Line("CPU Clock", clock, "Cache Memory", (mhz >= 133 ? "512K" : "256K"));
 			Rule('\xCC', '\xCD', '\xB9');
 			Line("Diskette Drive A", "1.44M, 3.5 in.", "Display Type", "EGA/VGA");
 			Line("Diskette Drive B", "None", "Serial Port(s)", "3F8 2F8");
