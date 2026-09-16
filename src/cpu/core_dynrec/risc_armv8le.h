@@ -1143,6 +1143,15 @@ static void cache_block_closing(const Bit8u* block_start,Bitu block_size) {
 	//flush cache
 	FlushInstructionCache(hProcess, block_start, block_size);
 }
+#elif defined(__APPLE__)
+#include <libkern/OSCacheControl.h>
+// macOS does not let user code read CTR_EL0 the way Linux does, so the mrs
+// in the flush below is an illegal instruction here and the first block the
+// recompiler closes takes the process down with SIGILL.  Apple's own call
+// does the same work and knows the cache line sizes already.
+static void cache_block_closing(const Bit8u* block_start,Bitu block_size) {
+	sys_icache_invalidate((void*)block_start, block_size);
+}
 #else
 static void cache_flush(char* start, char* end)
 {

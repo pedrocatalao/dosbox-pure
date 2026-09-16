@@ -27,6 +27,12 @@ int _newlib_vm_size_user = 0x1000000;
 extern "C" int getVMBlock();
 #endif
 
+#if defined(__APPLE__) && defined(__aarch64__)
+#define DRC_JIT_WX 1 /* the code cache is a MAP_JIT region, W^X; see below */
+#include <pthread.h>
+#include <sys/mman.h>
+#endif
+
 #ifdef HAVE_LIBNX
 #include <stdio.h>
 #include <switch.h>
@@ -126,6 +132,46 @@ static Bit8u * cache_code_link_blocks=NULL;
 
 static CacheBlockDynRec * cache_blocks=NULL;
 static CacheBlockDynRec link_blocks[2];		// default linking (specially marked)
+
+
+#if defined(DRC_JIT_WX)
+// Apple Silicon will not give a page both PROT_WRITE and PROT_EXEC.  A
+// MAP_JIT region is the way out: it is one or the other for the calling
+// thread, and pthread_jit_write_protect_np switches between them.  Every
+// write into the code cache is either one of the cache_add functions or
+// happens between cache_openblock and cache_closeblock, so those are the
+// only places that have to switch, and the depth count keeps the common
+// case - a cache_add inside an open block - down to an increment.
+//
+// The count is per thread because the protection is: a thread that has not
+// switched still sees the region as executable, which is what the CPU core
+// wants when it jumps into a block.
+static __thread int jit_write_depth;
+// Mapped once and kept for the life of the process.  The cache is torn down
+// and built again whenever the machine restarts (cpu.cpp, on shutdown), and
+// a MAP_JIT region is not worth handing back and asking for again each
+// time: it is the same size every time, so the one region is re-initialised
+// as often as the machine restarts.
+static Bit8u* jit_region;
+static INLINE void cache_write_begin(void) {
+	if (!jit_write_depth++) pthread_jit_write_protect_np(0);
+}
+static INLINE void cache_write_end(void) {
+	if (!--jit_write_depth) pthread_jit_write_protect_np(1);
+}
+// The pair a generated block sits in.  A block that was opened and never
+// closed would leave the count standing, so opening one sets the count
+// rather than trusting the last one to have balanced it: the region is then
+// left writable until the next close, which is untidy but cannot crash,
+// where a count drifting the other way would.
+static INLINE void cache_write_open(void) { jit_write_depth=0; cache_write_begin(); }
+static INLINE void cache_write_close(void) { cache_write_end(); }
+#else
+static INLINE void cache_write_begin(void) { }
+static INLINE void cache_write_end(void) { }
+static INLINE void cache_write_open(void) { }
+static INLINE void cache_write_close(void) { }
+#endif
 
 
 // the CodePageHandlerDynRec class provides access to the contained
@@ -538,6 +584,7 @@ void CacheBlockDynRec::Clear(void) {
 
 
 static CacheBlockDynRec * cache_openblock(void) {
+	cache_write_open();
 	CacheBlockDynRec * block=cache.block.active;
 	// check for enough space in this block
 	Bitu size=block->cache.size;
@@ -602,6 +649,9 @@ static void cache_closeblock(void) {
 	} else {
 		cache.block.active=block->cache.next;
 	}
+	// the block is written: the region goes back to being executable, and
+	// the caller flushes the instruction cache over it
+	cache_write_close();
 }
 
 
@@ -611,7 +661,9 @@ static INLINE void cache_addb(Bit8u val,const Bit8u *pos) {
 	Bit8u* rwPos = (Bit8u*)((intptr_t)pos - (intptr_t)jit_rx_addr + (intptr_t)jit_rw_addr);
 	*rwPos=val;
 #else
+	cache_write_begin();
 	*(Bit8u*)pos = val;
+	cache_write_end();
 #endif
 }
 static INLINE void cache_addb(Bit8u val) {
@@ -626,7 +678,9 @@ static INLINE void cache_addw(Bit16u val,const Bit8u *pos) {
 	Bit16u* rwPos = (Bit16u*)((intptr_t)pos - (intptr_t)jit_rx_addr + (intptr_t)jit_rw_addr);
 	*rwPos=val;
 #else
+	cache_write_begin();
 	*(Bit16u*)pos=val;
+	cache_write_end();
 #endif
 }
 static INLINE void cache_addw(Bit16u val) {
@@ -641,7 +695,9 @@ static INLINE void cache_addd(Bit32u val,const Bit8u *pos) {
 	Bit32u* rwPos = (Bit32u*)((intptr_t)pos - (intptr_t)jit_rx_addr + (intptr_t)jit_rw_addr);
 	*rwPos=val;
 #else
+	cache_write_begin();
 	*(Bit32u*)pos=val;
+	cache_write_end();
 #endif
 }
 static INLINE void cache_addd(Bit32u val) {
@@ -656,7 +712,9 @@ static INLINE void cache_addq(Bit64u val,const Bit8u *pos) {
 	Bit64u* rwPos = (Bit64u*)((intptr_t)pos - (intptr_t)jit_rx_addr + (intptr_t)jit_rw_addr);
 	*rwPos=val;
 #else
+	cache_write_begin();
 	*(Bit64u*)pos=val;
+	cache_write_end();
 #endif
 }
 static INLINE void cache_addq(Bit64u val) {
@@ -722,10 +780,27 @@ static void cache_init(bool enable) {
 #elif defined(WIIU)
 			cache_code_start_ptr=(Bit8u*)WUP_RWX_MEM_BASE;
 			//memset(cache_code_start_ptr, 0, (WUP_RWX_MEM_END - WUP_RWX_MEM_BASE));
+#elif defined(DRC_JIT_WX)
+			// MAP_JIT has to be asked for when the pages are mapped: mprotect
+			// cannot add PROT_EXEC to a plain allocation afterwards, which is
+			// what the generic path below does and what Apple Silicon refuses.
+			// The process needs the com.apple.security.cs.allow-jit
+			// entitlement or the mapping is denied.  It arrives executable,
+			// and the cache_write pair above turns it around to write.
+			if (!jit_region) {
+				void* p=mmap(NULL,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP,
+					PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANON|MAP_JIT,-1,0);
+				if (p!=MAP_FAILED) jit_region=(Bit8u*)p;
+			}
+			cache_code_start_ptr=jit_region;
 #else
 			cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
 #endif
-			if(!cache_code_start_ptr) E_Exit("Allocating dynamic cache failed");
+			// E_Exit comes back here in a libretro build - it logs, asks the
+			// core to shut down, and returns - so the failure has to be
+			// carried rather than assumed fatal: everything below builds the
+			// cache through this pointer, and a null one is written to.
+			if(!cache_code_start_ptr) { E_Exit("Allocating dynamic cache failed"); return; }
 
 			// align the cache at a page boundary
 			cache_code=(Bit8u*)(((Bitu)cache_code_start_ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1));//Bitu is same size as a pointer.
@@ -733,7 +808,7 @@ static void cache_init(bool enable) {
 			cache_code_link_blocks=cache_code;
 			cache_code=cache_code+PAGESIZE_TEMP;
 
-#if (C_HAVE_MPROTECT)
+#if (C_HAVE_MPROTECT) && !defined(DRC_JIT_WX)
 			if(mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ|PROT_EXEC))
 				LOG_MSG("Setting execute permission on the code cache has failed");
 #endif
@@ -822,6 +897,8 @@ static void cache_close(void) {
 		sceKernelFreeMemBlock(sceBlock);
 		sceBlock = 0;
 #elif defined(WIIU)
+#elif defined(DRC_JIT_WX)
+		// mapped, and kept mapped: jit_region holds it for the next machine
 #else
 		free(cache_code_start_ptr);
 #endif
