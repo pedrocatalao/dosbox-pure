@@ -41,6 +41,10 @@
 /* const char**: the drives the machine wants besides C:, a line each as
  * "D=LABEL=/host/folder/".  A catalogue on a letter is one of these. */
 #define DXM_ENV_DRIVES (RETRO_ENVIRONMENT_PRIVATE | 8)
+/* const char**: the chip the turbo display's clock names, as the POST
+ * prints it on its CPU Type line - "486DX2", "Pentium-MMX".  The machine
+ * keeps the table; the core only repeats what it is told. */
+#define DXM_ENV_CPU (RETRO_ENVIRONMENT_PRIVATE | 9)
 struct dxm_catalog_msg
 {
 	int op;    /* from the core: 0 poll, 1 open, 2 back from an excursion */
@@ -288,6 +292,8 @@ static void DBP_DXMBiosProgram(Program** make)
 
 			unsigned mhz = 66;
 			environ_cb(DXM_ENV_MHZ, &mhz);
+			const char* cpu = "486DX2";
+			environ_cb(DXM_ENV_CPU, &cpu);
 			Bitu total_kb = MEM_TotalPages() * 4;
 			char clock[16], base[16], ext[16], audio[32];
 			snprintf(clock, sizeof clock, "%uMHz", mhz);
@@ -312,9 +318,6 @@ static void DBP_DXMBiosProgram(Program** make)
 			Centred("DOS ex Machina");
 			Centred("System Configurations");
 			Rule('\xC9', '\xCD', '\xBB');
-			/* the chip each stop on the turbo display would have been */
-			const char* cpu = (mhz >= 200 ? "Pentium MMX" : mhz >= 133 ? "Pentium" :
-			                   mhz >= 100 ? "486DX4" : mhz >= 50 ? "486DX2" : "486DX");
 			Line("CPU Type", cpu, "Base Memory", base);
 			Line("Co-Processor", "Installed", "Extended Memory", ext);
 			Line("CPU Clock", clock, "Cache Memory", (mhz >= 133 ? "512K" : "256K"));
