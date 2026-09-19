@@ -45,6 +45,12 @@
  * prints it on its CPU Type line - "486DX2", "Pentium-MMX".  The machine
  * keeps the table; the core only repeats what it is told. */
 #define DXM_ENV_CPU (RETRO_ENVIRONMENT_PRIVATE | 9)
+/* const bool*: whether the card is in a text mode, said at every mode set.
+ * The machine draws a character generator's output differently from a
+ * game's art, and had been guessing which it was looking at from the
+ * frame's size - which the 43-line screen, 344 rows tall and not 350,
+ * was enough to fool. */
+#define DXM_ENV_TEXT (RETRO_ENVIRONMENT_PRIVATE | 10)
 struct dxm_catalog_msg
 {
 	int op;    /* from the core: 0 poll, 1 open, 2 back from an excursion */
@@ -65,6 +71,12 @@ static bool DXM_Present()
 	bool yes = false;
 	dbp_dxm_present = (environ_cb && environ_cb(DXM_ENV_HELLO, &yes) && yes);
 	return dbp_dxm_present;
+}
+
+/* Called where the core learns of a new video mode (GFX_SetSize). */
+static void DXM_TextMode(bool text)
+{
+	if (DXM_Present()) environ_cb(DXM_ENV_TEXT, &text);
 }
 
 /* NULL when the machine in front is not DXM, in which case the core keeps
